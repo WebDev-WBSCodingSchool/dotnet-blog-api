@@ -1,16 +1,19 @@
 using BlogApi.Models;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace BlogApi.Data;
 
-public class ApplicationDbContext : DbContext
+// IdentityDbContext adds the Identity tables (AspNetUsers, AspNetRoles, ...) and a Users DbSet.
+// The type arguments are our user class, the role class and the key type.
+public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
     {
     }
 
-    public DbSet<User> Users => Set<User>();
     public DbSet<Post> Posts => Set<Post>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -24,15 +27,13 @@ public class ApplicationDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Configures the Identity tables. Keep this call first.
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.Entity<User>(user =>
         {
+            // Identity configures Email and UserName. We only add our own column.
             user.Property(u => u.Name).HasMaxLength(100).IsRequired();
-            user.Property(u => u.Email).HasMaxLength(256).IsRequired();
-
-            // No two users can share an email.
-            user.HasIndex(u => u.Email).IsUnique();
         });
 
         modelBuilder.Entity<Post>(post =>

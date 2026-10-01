@@ -16,6 +16,7 @@ public static class UserEndpoints
 
         // TypedResults in the handler signatures tell OpenAPI about the success and 404 responses.
         // Responses produced outside the handler (validation, filters, exceptions) are listed by hand.
+        // Users are created through POST /auth/register.
         group.MapGet("/", GetAllUsers)
             .WithName("GetAllUsers")
             .WithSummary("List all users");
@@ -28,23 +29,6 @@ public static class UserEndpoints
         group.MapGet("/{id:guid}/posts", GetPostsByUser)
             .WithName("GetPostsByUser")
             .WithSummary("List the posts written by one user")
-            .ProducesValidationProblem();
-
-        group.MapPost("/", CreateUser)
-            .WithName("CreateUser")
-            .WithSummary("Create a user")
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status409Conflict);
-
-        group.MapPut("/{id:guid}", UpdateUser)
-            .WithName("UpdateUser")
-            .WithSummary("Replace a user's name and email")
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status409Conflict);
-
-        group.MapDelete("/{id:guid}", DeleteUser)
-            .WithName("DeleteUser")
-            .WithSummary("Delete a user and their posts")
             .ProducesValidationProblem();
 
         return group;
@@ -71,23 +55,5 @@ public static class UserEndpoints
         }
 
         return TypedResults.Ok(await postService.GetByUserAsync(id));
-    }
-
-    private static async Task<Created<UserResponseDto>> CreateUser(CreateUserDto dto, IUserService userService)
-    {
-        var user = await userService.CreateAsync(dto);
-        return TypedResults.Created($"/users/{user.Id}", user);
-    }
-
-    private static async Task<Results<Ok<UserResponseDto>, NotFound>> UpdateUser(
-        Guid id, UpdateUserDto dto, IUserService userService)
-    {
-        var user = await userService.UpdateAsync(id, dto);
-        return user is null ? TypedResults.NotFound() : TypedResults.Ok(user);
-    }
-
-    private static async Task<Results<NoContent, NotFound>> DeleteUser(Guid id, IUserService userService)
-    {
-        return await userService.DeleteAsync(id) ? TypedResults.NoContent() : TypedResults.NotFound();
     }
 }
