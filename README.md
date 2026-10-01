@@ -1,190 +1,69 @@
-# Blog API
+# Blog API: step 01, minimal API
 
-A minimal Blog API built with ASP.NET Core using Minimal APIs. This project demonstrates clean architecture principles with DTOs, in-memory persistence, and extension methods for endpoint organization.
+Lesson: Blog API exercise (Dependency Injection and in-memory services)
 
-## Overview
+This repository holds the Blog API used across the ASP.NET Core lessons. Each lesson has its own branch. The starter for a lesson is the previous step's branch, and the finished code is the lesson's own branch.
 
-This is a solution to the **Blog API** exercise that showcases:
+## What this step adds
 
-- **Minimal APIs** with ASP.NET Core
-- **Extension methods** for endpoint organization
-- **DTOs** for request/response contracts
-- **In-memory persistence** using services
-- **One-to-many relationship** between Users and Posts
+- A solution (`BlogApi.slnx`) with one project in `BlogApi/`
+- `Models/User.cs` and `Models/Post.cs`
+- Request and response DTOs in `Dtos/Users` and `Dtos/Posts`
+- `IUserService` and `IPostService` with in-memory implementations in `Services/`
+- Services registered in `Program.cs` as singletons, because they keep their data in memory
+- CRUD endpoints for users and posts in `Endpoints/`, grouped with `MapGroup`
+- `GET /users/{id}/posts` to list the posts of one user
+- `201 Created` with a `Location` header when a user or post is created
+- `PUT` for updates
 
-## Features
-
-- **User Management**: Create, read, update, and delete users
-- **Post Management**: Create, read, update, and delete blog posts
-- **Relationships**: Each post belongs to exactly one user; users can have multiple posts
-- **Data Validation**: User existence validation when creating posts
-- **Cascade Protection**: Users with posts cannot be deleted
-
-## Architecture
-
-The project follows a clean, layered architecture:
+## Project layout
 
 ```
+BlogApi.slnx
 BlogApi/
-├── Program.cs                    # Application entry point and service configuration
-├── Models/                       # Domain entities
-│   ├── User.cs                  # User entity
-│   └── Post.cs                  # Post entity
-├── Dtos/                        # Data Transfer Objects
-│   ├── Users/
-│   │   ├── CreateUserDto.cs     # User creation request
-│   │   ├── UpdateUserDto.cs     # User update request (partial)
-│   │   └── UserResponseDto.cs   # User response
-│   └── Posts/
-│       ├── CreatePostDto.cs     # Post creation request
-│       ├── UpdatePostDto.cs     # Post update request (partial)
-│       └── PostResponseDto.cs   # Post response
-├── Services/                    # Business logic layer
-│   ├── Interfaces/
-│   │   ├── IUserService.cs      # User service contract
-│   │   └── IPostService.cs      # Post service contract
-│   ├── InMemoryUserService.cs   # In-memory user operations
-│   └── InMemoryPostService.cs   # In-memory post operations
-└── Endpoints/                   # API endpoint definitions
-    ├── UserEndpoints.cs         # User-related endpoints
-    └── PostEndpoints.cs         # Post-related endpoints
+  Program.cs
+  Endpoints/   UserEndpoints.cs, PostEndpoints.cs
+  Dtos/        Users/, Posts/
+  Models/      User.cs, Post.cs
+  Services/    IUserService.cs, UserService.cs, IPostService.cs, PostService.cs
 ```
 
-## Data Model
+## Run it
 
-### User
-
-- `Id` (Guid) - Unique identifier
-- `Name` (string) - User's display name
-- `Email` (string) - User's email address
-- `CreatedAt` (DateTimeOffset) - Account creation timestamp
-
-### Post
-
-- `Id` (Guid) - Unique identifier
-- `UserId` (Guid) - Reference to the owning user
-- `Title` (string) - Post title
-- `Content` (string) - Post content
-- `PublishedAt` (DateTimeOffset?) - Publication timestamp (nullable)
-
-## API Endpoints
-
-### Users
-
-| Method   | Endpoint            | Description           | Request Body    | Response                                    |
-| -------- | ------------------- | --------------------- | --------------- | ------------------------------------------- |
-| `GET`    | `/users`            | Get all users         | -               | `UserResponseDto[]`                         |
-| `GET`    | `/users/{id}`       | Get user by ID        | -               | `UserResponseDto` or `404`                  |
-| `POST`   | `/users`            | Create new user       | `CreateUserDto` | `201` + `UserResponseDto` + Location header |
-| `PATCH`  | `/users/{id}`       | Update user (partial) | `UpdateUserDto` | `UserResponseDto` or `404`                  |
-| `DELETE` | `/users/{id}`       | Delete user           | -               | `204` or `404` or `400` (if user has posts) |
-| `GET`    | `/users/{id}/posts` | Get user's posts      | -               | `PostResponseDto[]`                         |
-
-### Posts
-
-| Method   | Endpoint      | Description           | Request Body    | Response                                    |
-| -------- | ------------- | --------------------- | --------------- | ------------------------------------------- |
-| `GET`    | `/posts`      | Get all posts         | -               | `PostResponseDto[]`                         |
-| `GET`    | `/posts/{id}` | Get post by ID        | -               | `PostResponseDto` or `404`                  |
-| `POST`   | `/posts`      | Create new post       | `CreatePostDto` | `201` + `PostResponseDto` + Location header |
-| `PATCH`  | `/posts/{id}` | Update post (partial) | `UpdatePostDto` | `PostResponseDto` or `404`                  |
-| `DELETE` | `/posts/{id}` | Delete post           | -               | `204` or `404`                              |
-
-## Getting Started
-
-### Prerequisites
-
-- .NET 9.0 SDK
-- Your favorite code editor (VS Code recommended)
-
-### Installation & Setup
-
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/WebDev-WBSCodingSchool/dotnet-blog-api.git
-   cd dotnet-blog-api
-   ```
-
-2. **Restore dependencies:**
-
-   ```bash
-   dotnet restore
-   ```
-
-3. **Run the application:**
-
-   ```bash
-   dotnet run
-   ```
-
-4. **Access the API:**
-   - Base URL: `https://localhost:7186` (or check console output for actual port)
-
-### Alternative Setup (Creating from scratch)
-
-## Usage Examples
-
-### Create a User
+Requires the .NET 10 SDK.
 
 ```bash
-curl -X POST https://localhost:7186/users \
+dotnet run --project BlogApi
+```
+
+The API listens on `http://localhost:5080`.
+
+```bash
+curl -i -X POST http://localhost:5080/users \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "John Doe",
-    "email": "john.doe@example.com"
-  }'
+  -d '{"name":"Ada","email":"ada@example.com"}'
+
+curl http://localhost:5080/users
 ```
 
-### Create a Post
+## Endpoints
 
-```bash
-curl -X POST https://localhost:7186/posts \
-  -H "Content-Type: application/json" \
-  -d '{
-    "userId": "your-user-guid-here",
-    "title": "My First Post",
-    "content": "This is the content of my first blog post."
-  }'
-```
+| Method | Route | Result |
+|---|---|---|
+| GET | /users | 200 |
+| GET | /users/{id} | 200, 404 |
+| GET | /users/{id}/posts | 200, 404 |
+| POST | /users | 201 |
+| PUT | /users/{id} | 200, 404 |
+| DELETE | /users/{id} | 204, 404 |
+| GET | /posts | 200 |
+| GET | /posts/{id} | 200, 404 |
+| POST | /posts | 201, 400 |
+| PUT | /posts/{id} | 200, 404 |
+| DELETE | /posts/{id} | 204, 404 |
 
-### Get All Users
+Data is kept in memory and is lost when the app stops.
 
-```bash
-curl https://localhost:7186/users
-```
+## Next step
 
-### Get User's Posts
-
-```bash
-curl https://localhost:7186/users/{userId}/posts
-```
-
-## Business Rules
-
-1. **User-Post Relationship**: Each post must belong to an existing user
-2. **Cascade Protection**: Users cannot be deleted if they have associated posts
-3. **Partial Updates**: Both users and posts support partial updates via PATCH endpoints
-4. **Validation**: Creating a post with a non-existent `UserId` returns `400 Bad Request`
-
-## Design Decisions
-
-### DTOs vs Entities
-
-- **DTOs** are used at the HTTP boundary to control data exposure and validation
-- **Entities** remain clean domain objects without serialization attributes
-- Mapping between DTOs and entities happens in the endpoint handlers
-
-### In-Memory Storage
-
-- Uses `Dictionary<Guid, T>` for fast lookups by ID
-- `List<T>` for operations requiring enumeration
-- Services are registered as **singletons** to maintain shared state across requests
-
-### Service Layer
-
-- Interfaces define contracts for testability and future extensibility
-- Async methods prepare for future database integration
-- Business logic is encapsulated in services, not in endpoints
-
-**Repository**: [https://github.com/WebDev-WBSCodingSchool/dotnet-blog-api](https://github.com/WebDev-WBSCodingSchool/dotnet-blog-api)
+`step-02-validation`

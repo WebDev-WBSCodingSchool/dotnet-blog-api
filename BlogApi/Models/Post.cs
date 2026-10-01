@@ -6,5 +6,5 @@ public class Post
     public Guid UserId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
-    public DateTimeOffset? PublishedAt { get; set; }
+    public DateTimeOffset PublishedAt { get; set; }
 }
