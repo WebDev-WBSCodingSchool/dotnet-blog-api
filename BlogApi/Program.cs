@@ -1,10 +1,15 @@
+using System.Text;
 using BlogApi.Data;
 using BlogApi.Endpoints;
 using BlogApi.Errors;
 using BlogApi.Models;
 using BlogApi.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,6 +37,39 @@ builder.Services
     .AddRoles<IdentityRole<Guid>>()
     .AddEntityFrameworkStores<ApplicationDbContext>();
 
+// Authentication: read the "Authorization: Bearer <token>" header and check the token.
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        // Keep the claim names from the token as they are ("sub", "email", "name").
+        // Without this, "sub" would be renamed to ClaimTypes.NameIdentifier.
+        options.MapInboundClaims = false;
+
+        var key = builder.Configuration["Jwt:Key"]
+            ?? throw new InvalidOperationException("Jwt:Key is not configured.");
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            // The token must be signed with our key.
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+
+            // The token must come from our API and be meant for our API.
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+
+            // The token must not be expired. By default 5 minutes of clock difference are allowed.
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+
+// Authorization: decides whether the authenticated user may call an endpoint.
+builder.Services.AddAuthorization();
+
 // The services use the DbContext, so they are scoped too. A singleton cannot depend on a
 // scoped service, because it would keep one DbContext alive for the whole app.
 builder.Services.AddScoped<IUserService, UserService>();
@@ -39,7 +77,41 @@ builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
 // Generates an OpenAPI document that describes every endpoint.
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    // Describe the Bearer scheme, so Scalar shows an "Authentication" box for the token.
+    options.AddDocumentTransformer((document, context, cancellationToken) =>
+    {
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+        document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            Description = "Paste the token returned by POST /auth/login."
+        };
+        return Task.CompletedTask;
+    });
+
+    // Mark the endpoints that call RequireAuthorization() as needing the Bearer token.
+    options.AddOperationTransformer((operation, context, cancellationToken) =>
+    {
+        var requiresAuth = context.Description.ActionDescriptor.EndpointMetadata
+            .OfType<IAuthorizeData>()
+            .Any();
+
+        if (requiresAuth)
+        {
+            operation.Security ??= [];
+            operation.Security.Add(new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference("Bearer", context.Document)] = []
+            });
+        }
+        return Task.CompletedTask;
+    });
+});
 
 var app = builder.Build();
 
@@ -69,6 +141,10 @@ app.UseExceptionHandler();
 
 // Adds a ProblemDetails body to error responses that have none, such as a plain 404.
 app.UseStatusCodePages();
+
+// Authentication first (who are you?), then authorization (are you allowed?).
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapAuthEndpoints();
 app.MapUserEndpoints();

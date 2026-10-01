@@ -51,11 +51,9 @@ public class PostService : IPostService
             .FirstOrDefaultAsync();
     }
 
-    // Returns null when the author does not exist.
-    public async Task<PostResponseDto?> CreateAsync(CreatePostDto dto)
+    public async Task<PostResponseDto?> CreateAsync(Guid userId, CreatePostDto dto)
     {
-        // Validation has already checked that UserId is present.
-        var user = await _db.Users.FindAsync(dto.UserId!.Value);
+        var user = await _db.Users.FindAsync(userId);
         if (user is null)
         {
             return null;

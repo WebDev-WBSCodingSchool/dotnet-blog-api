@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using BlogApi.Dtos.Posts;
 using BlogApi.Filters;
 using BlogApi.Services;
@@ -13,6 +14,7 @@ public static class PostEndpoints
             .WithTags("Posts")
             .AddEndpointFilter<RejectEmptyIdFilter>();
 
+        // Reading posts is public.
         group.MapGet("/", GetAllPosts)
             .WithName("GetAllPosts")
             .WithSummary("List posts, newest first, optionally filtered by a search term");
@@ -22,20 +24,29 @@ public static class PostEndpoints
             .WithSummary("Get one post by id")
             .ProducesValidationProblem();
 
-        // CreatePost already returns ValidationProblem, so the 400 response is inferred.
+        // Writing posts needs a valid token. Without one the response is 401.
         group.MapPost("/", CreatePost)
+            .RequireAuthorization()
             .WithName("CreatePost")
-            .WithSummary("Create a post");
+            .WithSummary("Create a post as the logged-in user")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         group.MapPut("/{id:guid}", UpdatePost)
+            .RequireAuthorization()
             .WithName("UpdatePost")
-            .WithSummary("Replace a post's title and content")
-            .ProducesValidationProblem();
+            .WithSummary("Replace the title and content of one of your posts")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
 
         group.MapDelete("/{id:guid}", DeletePost)
+            .RequireAuthorization()
             .WithName("DeletePost")
-            .WithSummary("Delete a post")
-            .ProducesValidationProblem();
+            .WithSummary("Delete one of your posts")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
 
         return group;
     }
@@ -52,32 +63,53 @@ public static class PostEndpoints
         return post is null ? TypedResults.NotFound() : TypedResults.Ok(post);
     }
 
-    // The DTO is validated before this handler runs. An invalid body gets a 400 response
-    // and the handler is never called.
-    private static async Task<Results<Created<PostResponseDto>, ValidationProblem>> CreatePost(
-        CreatePostDto dto, IPostService postService)
+    // ClaimsPrincipal is the authenticated user, built from the token.
+    private static async Task<Results<Created<PostResponseDto>, UnauthorizedHttpResult>> CreatePost(
+        CreatePostDto dto, ClaimsPrincipal user, IPostService postService)
     {
-        var post = await postService.CreateAsync(dto);
+        var post = await postService.CreateAsync(user.GetUserId(), dto);
         if (post is null)
         {
-            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
-            {
-                ["UserId"] = [$"No user exists with the id '{dto.UserId}'."]
-            });
+            // The token is valid, but its user no longer exists.
+            return TypedResults.Unauthorized();
         }
 
         return TypedResults.Created($"/posts/{post.Id}", post);
     }
 
-    private static async Task<Results<Ok<PostResponseDto>, NotFound>> UpdatePost(
-        Guid id, UpdatePostDto dto, IPostService postService)
+    private static async Task<Results<Ok<PostResponseDto>, NotFound, ForbidHttpResult>> UpdatePost(
+        Guid id, UpdatePostDto dto, ClaimsPrincipal user, IPostService postService)
     {
-        var post = await postService.UpdateAsync(id, dto);
-        return post is null ? TypedResults.NotFound() : TypedResults.Ok(post);
+        var post = await postService.GetByIdAsync(id);
+        if (post is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        // Logged in, but not the author: 403 Forbidden.
+        if (post.UserId != user.GetUserId())
+        {
+            return TypedResults.Forbid();
+        }
+
+        var updated = await postService.UpdateAsync(id, dto);
+        return updated is null ? TypedResults.NotFound() : TypedResults.Ok(updated);
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeletePost(Guid id, IPostService postService)
+    private static async Task<Results<NoContent, NotFound, ForbidHttpResult>> DeletePost(
+        Guid id, ClaimsPrincipal user, IPostService postService)
     {
+        var post = await postService.GetByIdAsync(id);
+        if (post is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        if (post.UserId != user.GetUserId())
+        {
+            return TypedResults.Forbid();
+        }
+
         return await postService.DeleteAsync(id) ? TypedResults.NoContent() : TypedResults.NotFound();
     }
 }

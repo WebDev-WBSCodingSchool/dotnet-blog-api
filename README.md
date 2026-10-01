@@ -1,28 +1,32 @@
-# Blog API: step 06, ASP.NET Core Identity
+# Blog API: step 07, JWT authentication
 
-Lesson: ASP.NET Core Identity (follow-along on the Blog API)
+Lesson: JWT Authentication and Authorization
 
 This repository holds the Blog API used across the ASP.NET Core lessons. Each lesson has its own branch. The starter for a lesson is the previous step's branch, and the finished code is the lesson's own branch.
 
 ## What this step adds
 
-- `Microsoft.AspNetCore.Identity.EntityFrameworkCore` 10.0.x
-- `User` inherits from `IdentityUser<Guid>` and keeps `Name` and `CreatedAt`
-- `ApplicationDbContext` inherits from `IdentityDbContext<User, IdentityRole<Guid>, Guid>`, which adds the `AspNet*` tables
-- `AddIdentityCore<User>()` with roles and the EF Core stores, and unique emails
-- The `AddIdentity` migration. It renames the `Users` table to `AspNetUsers` and adds the Identity columns and tables
-- `POST /auth/register` in `Endpoints/AuthEndpoints.cs`, using `UserManager<User>` through `Services/AuthService.cs`. Identity errors come back as a `400` ValidationProblem
-- Users are now created only through registration. `POST /users`, `PUT /users/{id}` and `DELETE /users/{id}` are removed, and `GET /users` and `GET /users/{id}` stay
-- The seeder creates its users through `UserManager`, with the password `Passw0rd!`
+- `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.x, with `TokenValidationParameters` that check the signature, issuer, audience and expiry
+- `POST /auth/login` returns a signed JWT and its `expiresAt` (a `DateTimeOffset`)
+- `GET /auth/me` returns the user that owns the token
+- `POST`, `PUT` and `DELETE /posts` call `.RequireAuthorization()`. Without a valid token they return `401`
+- The author of a new post is the logged-in user. `CreatePostDto` no longer has a `UserId`
+- Only the author can update or delete a post. Anyone else gets `403`, and a missing post gives `404`
+- `MapInboundClaims = false`, so the user id stays in the `sub` claim. `Endpoints/ClaimsPrincipalExtensions.cs` reads it with `User.GetUserId()`
+- A Bearer security scheme in the OpenAPI document, so Scalar can send the token
+- A `Jwt` section in the configuration and a `UserSecretsId` in the project file
 
-## Password rules
+## The signing key
 
-Identity's default password policy is kept:
+`appsettings.Development.json` contains a development key, so the project runs straight after cloning. HMAC-SHA256 needs a key of at least 32 bytes; this one is 64 characters.
 
-- at least 6 characters
-- at least one uppercase letter, one lowercase letter, one digit and one non-alphanumeric character
+In a real project the key must not be committed. Remove it from `appsettings.Development.json` and store it with the Secret Manager:
 
-`RegisterDto` asks for at least 8 characters, which is stricter than the default length and agrees with the other rules.
+```bash
+dotnet user-secrets set "Jwt:Key" "<a random string of at least 32 characters>" --project BlogApi
+```
+
+In production, set it as an environment variable (`Jwt__Key`) or in a key vault.
 
 ## Project layout
 
@@ -30,7 +34,7 @@ Identity's default password policy is kept:
 BlogApi.slnx
 BlogApi/
   Program.cs
-  Endpoints/   AuthEndpoints.cs, UserEndpoints.cs, PostEndpoints.cs
+  Endpoints/   AuthEndpoints.cs, UserEndpoints.cs, PostEndpoints.cs, ClaimsPrincipalExtensions.cs
   Filters/     RejectEmptyIdFilter.cs
   Errors/      GlobalExceptionHandler.cs
   Dtos/        Auth/, Users/, Posts/
@@ -77,25 +81,43 @@ curl -i -X POST http://localhost:5080/auth/register \
   -H "Content-Type: application/json" \
   -d '{"name":"Grace","email":"grace@example.com","password":"Str0ng!pass"}'
 
-curl http://localhost:5080/users
+curl -X POST http://localhost:5080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"grace@example.com","password":"Str0ng!pass"}'
+
+# Copy the token from the response
+TOKEN=<token>
+
+curl http://localhost:5080/auth/me -H "Authorization: Bearer $TOKEN"
+
+curl -i -X POST http://localhost:5080/posts \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"title":"Hello","content":"My first post"}'
 ```
+
+The seeded users `ada@example.com` and `alan@example.com` can log in with `Passw0rd!`.
+
+In Scalar, paste the token into the Authentication box to call the protected endpoints.
 
 ## Endpoints
 
 | Method | Route | Result |
 |---|---|---|
 | POST | /auth/register | 201, 400 |
+| POST | /auth/login | 200, 400, 401 |
+| GET | /auth/me (token) | 200, 401, 404 |
 | GET | /users | 200 |
 | GET | /users/{id} | 200, 404 |
 | GET | /users/{id}/posts | 200, 404 |
 | GET | /posts?search={term} | 200 |
 | GET | /posts/{id} | 200, 404 |
-| POST | /posts | 201, 400 |
-| PUT | /posts/{id} | 200, 400, 404 |
-| DELETE | /posts/{id} | 204, 404 |
+| POST | /posts (token) | 201, 400, 401 |
+| PUT | /posts/{id} (token, author only) | 200, 400, 401, 403, 404 |
+| DELETE | /posts/{id} (token, author only) | 204, 401, 403, 404 |
 
 Data is stored in the SQLite file `BlogApi/blog.db`, which is ignored by Git.
 
 ## Next step
 
-`step-07-jwt`
+`step-08-testing`
