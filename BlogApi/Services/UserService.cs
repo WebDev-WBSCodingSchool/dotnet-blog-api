@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using BlogApi.Dtos.Users;
+using BlogApi.Errors;
 using BlogApi.Models;
 
 namespace BlogApi.Services;
@@ -33,6 +34,8 @@ public class UserService : IUserService
 
     public Task<UserResponseDto> CreateAsync(CreateUserDto dto)
     {
+        EnsureEmailIsFree(dto.Email, null);
+
         var user = new User
         {
             Id = Guid.NewGuid(),
@@ -52,6 +55,8 @@ public class UserService : IUserService
             return Task.FromResult<UserResponseDto?>(null);
         }
 
+        EnsureEmailIsFree(dto.Email, id);
+
         user.Name = dto.Name;
         user.Email = dto.Email;
         return Task.FromResult<UserResponseDto?>(ToDto(user));
@@ -60,6 +65,18 @@ public class UserService : IUserService
     public Task<bool> DeleteAsync(Guid id)
     {
         return Task.FromResult(_users.TryRemove(id, out _));
+    }
+
+    // Throws when another user already has this email. The exception handler turns it into a 409.
+    private void EnsureEmailIsFree(string email, Guid? currentUserId)
+    {
+        var taken = _users.Values.Any(u =>
+            u.Id != currentUserId && string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase));
+
+        if (taken)
+        {
+            throw new ConflictException($"A user with the email '{email}' already exists.");
+        }
     }
 
     private static UserResponseDto ToDto(User user) =>

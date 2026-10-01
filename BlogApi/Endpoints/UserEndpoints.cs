@@ -1,5 +1,6 @@
 using BlogApi.Dtos.Posts;
 using BlogApi.Dtos.Users;
+using BlogApi.Filters;
 using BlogApi.Services;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -9,7 +10,8 @@ public static class UserEndpoints
 {
     public static RouteGroupBuilder MapUserEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/users");
+        var group = app.MapGroup("/users")
+            .AddEndpointFilter<RejectEmptyIdFilter>();
 
         group.MapGet("/", GetAllUsers);
         group.MapGet("/{id:guid}", GetUserById);

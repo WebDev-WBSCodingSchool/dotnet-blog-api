@@ -1,4 +1,5 @@
 using BlogApi.Dtos.Posts;
+using BlogApi.Filters;
 using BlogApi.Services;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -8,7 +9,8 @@ public static class PostEndpoints
 {
     public static RouteGroupBuilder MapPostEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/posts");
+        var group = app.MapGroup("/posts")
+            .AddEndpointFilter<RejectEmptyIdFilter>();
 
         group.MapGet("/", GetAllPosts);
         group.MapGet("/{id:guid}", GetPostById);
@@ -30,13 +32,18 @@ public static class PostEndpoints
         return post is null ? TypedResults.NotFound() : TypedResults.Ok(post);
     }
 
-    private static async Task<Results<Created<PostResponseDto>, BadRequest<string>>> CreatePost(
+    // The DTO is validated before this handler runs. An invalid body gets a 400 response
+    // and the handler is never called.
+    private static async Task<Results<Created<PostResponseDto>, ValidationProblem>> CreatePost(
         CreatePostDto dto, IPostService postService)
     {
         var post = await postService.CreateAsync(dto);
         if (post is null)
         {
-            return TypedResults.BadRequest($"User '{dto.UserId}' does not exist.");
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["UserId"] = [$"No user exists with the id '{dto.UserId}'."]
+            });
         }
 
         return TypedResults.Created($"/posts/{post.Id}", post);
