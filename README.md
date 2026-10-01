@@ -1,18 +1,16 @@
-# Blog API: step 02, validation and error handling
+# Blog API: step 03, OpenAPI
 
-Lesson: Blog API validation and error handling exercise
+Lesson: Documenting APIs (OpenAPI exercise)
 
 This repository holds the Blog API used across the ASP.NET Core lessons. Each lesson has its own branch. The starter for a lesson is the previous step's branch, and the finished code is the lesson's own branch.
 
 ## What this step adds
 
-- DataAnnotations on the request DTOs (`[Required]`, `[StringLength]`, `[EmailAddress]`)
-- Built-in validation with `builder.Services.AddValidation()`. Invalid bodies get a `400` with a ProblemDetails body listing the errors
-- `CreatePostDto.UserId` is a `Guid?` with `[Required]`, so a missing `userId` gives a `400`
-- `AddProblemDetails()`, `UseExceptionHandler()` and `UseStatusCodePages()`, so every error response uses the ProblemDetails format
-- `Errors/GlobalExceptionHandler.cs`, an `IExceptionHandler` that maps `ConflictException` to `409` and unexpected exceptions to `500`
-- `Errors/ConflictException.cs`, thrown when an email is already taken
-- `Filters/RejectEmptyIdFilter.cs`, an endpoint filter that returns `400` for an empty GUID in the route
+- `Microsoft.AspNetCore.OpenApi` 10.0.x: `AddOpenApi()` and `MapOpenApi()` generate an OpenAPI 3.1 document
+- `Scalar.AspNetCore` 2.x: `MapScalarApiReference()` serves an interactive API reference
+- Both are mapped only in the Development environment
+- `WithTags`, `WithName` and `WithSummary` on every endpoint
+- `ProducesValidationProblem()` and `ProducesProblem(409)` for responses that come from validation, filters or the exception handler. Responses returned through `TypedResults` are described automatically
 
 ## Project layout
 
@@ -37,6 +35,9 @@ dotnet run --project BlogApi
 ```
 
 The API listens on `http://localhost:5080`.
+
+- OpenAPI document: http://localhost:5080/openapi/v1.json
+- Scalar API reference: http://localhost:5080/scalar
 
 ```bash
 curl -i -X POST http://localhost:5080/users \
@@ -71,4 +72,4 @@ Data is kept in memory and is lost when the app stops.
 
 ## Next step
 
-`step-03-openapi`
+`step-04-ef-core`

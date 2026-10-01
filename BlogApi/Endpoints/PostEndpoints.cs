@@ -10,13 +10,32 @@ public static class PostEndpoints
     public static RouteGroupBuilder MapPostEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/posts")
+            .WithTags("Posts")
             .AddEndpointFilter<RejectEmptyIdFilter>();
 
-        group.MapGet("/", GetAllPosts);
-        group.MapGet("/{id:guid}", GetPostById);
-        group.MapPost("/", CreatePost);
-        group.MapPut("/{id:guid}", UpdatePost);
-        group.MapDelete("/{id:guid}", DeletePost);
+        group.MapGet("/", GetAllPosts)
+            .WithName("GetAllPosts")
+            .WithSummary("List all posts, newest first");
+
+        group.MapGet("/{id:guid}", GetPostById)
+            .WithName("GetPostById")
+            .WithSummary("Get one post by id")
+            .ProducesValidationProblem();
+
+        // CreatePost already returns ValidationProblem, so the 400 response is inferred.
+        group.MapPost("/", CreatePost)
+            .WithName("CreatePost")
+            .WithSummary("Create a post");
+
+        group.MapPut("/{id:guid}", UpdatePost)
+            .WithName("UpdatePost")
+            .WithSummary("Replace a post's title and content")
+            .ProducesValidationProblem();
+
+        group.MapDelete("/{id:guid}", DeletePost)
+            .WithName("DeletePost")
+            .WithSummary("Delete a post")
+            .ProducesValidationProblem();
 
         return group;
     }

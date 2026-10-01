@@ -11,14 +11,41 @@ public static class UserEndpoints
     public static RouteGroupBuilder MapUserEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/users")
+            .WithTags("Users")
             .AddEndpointFilter<RejectEmptyIdFilter>();
 
-        group.MapGet("/", GetAllUsers);
-        group.MapGet("/{id:guid}", GetUserById);
-        group.MapGet("/{id:guid}/posts", GetPostsByUser);
-        group.MapPost("/", CreateUser);
-        group.MapPut("/{id:guid}", UpdateUser);
-        group.MapDelete("/{id:guid}", DeleteUser);
+        // TypedResults in the handler signatures tell OpenAPI about the success and 404 responses.
+        // Responses produced outside the handler (validation, filters, exceptions) are listed by hand.
+        group.MapGet("/", GetAllUsers)
+            .WithName("GetAllUsers")
+            .WithSummary("List all users");
+
+        group.MapGet("/{id:guid}", GetUserById)
+            .WithName("GetUserById")
+            .WithSummary("Get one user by id")
+            .ProducesValidationProblem();
+
+        group.MapGet("/{id:guid}/posts", GetPostsByUser)
+            .WithName("GetPostsByUser")
+            .WithSummary("List the posts written by one user")
+            .ProducesValidationProblem();
+
+        group.MapPost("/", CreateUser)
+            .WithName("CreateUser")
+            .WithSummary("Create a user")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapPut("/{id:guid}", UpdateUser)
+            .WithName("UpdateUser")
+            .WithSummary("Replace a user's name and email")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapDelete("/{id:guid}", DeleteUser)
+            .WithName("DeleteUser")
+            .WithSummary("Delete a user and their posts")
+            .ProducesValidationProblem();
 
         return group;
     }

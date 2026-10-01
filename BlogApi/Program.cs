@@ -1,6 +1,7 @@
 using BlogApi.Endpoints;
 using BlogApi.Errors;
 using BlogApi.Services;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,7 +20,20 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddSingleton<IUserService, UserService>();
 builder.Services.AddSingleton<IPostService, PostService>();
 
+// Generates an OpenAPI document that describes every endpoint.
+builder.Services.AddOpenApi();
+
 var app = builder.Build();
+
+// Only expose the API documentation while developing.
+if (app.Environment.IsDevelopment())
+{
+    // The OpenAPI document: /openapi/v1.json
+    app.MapOpenApi();
+
+    // Interactive API reference built from that document: /scalar
+    app.MapScalarApiReference();
+}
 
 // Catches exceptions thrown later in the pipeline and passes them to GlobalExceptionHandler.
 app.UseExceptionHandler();
