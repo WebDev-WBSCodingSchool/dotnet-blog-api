@@ -1,20 +1,20 @@
-# Blog API: step 07, JWT authentication
+# Blog API: step 08, testing
 
-Lesson: JWT Authentication and Authorization
+Lesson: Unit Testing and Integration Testing in ASP.NET
 
 This repository holds the Blog API used across the ASP.NET Core lessons. Each lesson has its own branch. The starter for a lesson is the previous step's branch, and the finished code is the lesson's own branch.
 
 ## What this step adds
 
-- `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.x, with `TokenValidationParameters` that check the signature, issuer, audience and expiry
-- `POST /auth/login` returns a signed JWT and its `expiresAt` (a `DateTimeOffset`)
-- `GET /auth/me` returns the user that owns the token
-- `POST`, `PUT` and `DELETE /posts` call `.RequireAuthorization()`. Without a valid token they return `401`
-- The author of a new post is the logged-in user. `CreatePostDto` no longer has a `UserId`
-- Only the author can update or delete a post. Anyone else gets `403`, and a missing post gives `404`
-- `MapInboundClaims = false`, so the user id stays in the `sub` claim. `Endpoints/ClaimsPrincipalExtensions.cs` reads it with `User.GetUserId()`
-- A Bearer security scheme in the OpenAPI document, so Scalar can send the token
-- A `Jwt` section in the configuration and a `UserSecretsId` in the project file
+- A test project, `BlogApi.Tests`, created with `dotnet new xunit` and added to `BlogApi.slnx`
+- Packages: xUnit 2.9.3, Moq 4.21.0, `Microsoft.AspNetCore.Mvc.Testing` 10.0.x and `Microsoft.EntityFrameworkCore.InMemory` 10.0.x
+- `Unit/TestDbContextFactory.cs` creates an in-memory `ApplicationDbContext` with a new database name for every test
+- `Unit/PostServiceTests.cs` tests `PostService` against that in-memory database
+- `Unit/AuthServiceTests.cs` tests `AuthService` with a mocked `UserManager<User>` (Moq) and checks the `sub` claim of the issued token
+- `Integration/CustomWebApplicationFactory.cs` starts the API in memory. In `ConfigureTestServices` it removes the SQLite `DbContext` registration and adds an in-memory database, unique to each factory
+- `Integration/TestAuthHandler.cs`, a fake authentication scheme that logs a test in as the user named in the `X-Test-UserId` header
+- Integration tests for public and protected endpoints: `401` without a token, `201` with a user, `403` when editing someone else's post, and a full register, login and Bearer flow with a real JWT
+- No changes to the API project. .NET 10 makes the `Program` class public, so `WebApplicationFactory<Program>` works without a `public partial class Program` line
 
 ## The signing key
 
@@ -41,6 +41,9 @@ BlogApi/
   Models/      User.cs, Post.cs
   Services/    IAuthService.cs, AuthService.cs, IUserService.cs, UserService.cs, IPostService.cs, PostService.cs
   Data/        ApplicationDbContext.cs, DbSeeder.cs, Migrations/
+BlogApi.Tests/
+  Unit/          TestDbContextFactory.cs, PostServiceTests.cs, AuthServiceTests.cs
+  Integration/   CustomWebApplicationFactory.cs, TestAuthHandler.cs, AuthEndpointsTests.cs, PostEndpointsTests.cs, UserEndpointsTests.cs
 dotnet-tools.json
 ```
 
@@ -64,6 +67,12 @@ dotnet ef database update --project BlogApi
 To start again with a fresh database, stop the app and delete `BlogApi/blog.db`.
 
 If you have a `blog.db` from step 05, the `AddIdentity` migration keeps your old users, but they have no password and cannot log in. Delete `BlogApi/blog.db` (or run `dotnet ef database drop --project BlogApi`) and start the app again, so the seeder creates users with passwords.
+
+Run the tests:
+
+```bash
+dotnet test
+```
 
 To add a migration after changing the model:
 
@@ -120,4 +129,4 @@ Data is stored in the SQLite file `BlogApi/blog.db`, which is ignored by Git.
 
 ## Next step
 
-`step-08-testing`
+`step-09-observability`
