@@ -10,5 +10,4 @@ public interface IPostService
     Task<PostResponseDto?> CreateAsync(CreatePostDto dto);
     Task<PostResponseDto?> UpdateAsync(Guid id, UpdatePostDto dto);
     Task<bool> DeleteAsync(Guid id);
-    Task DeleteByUserAsync(Guid userId);
 }

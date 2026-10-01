@@ -86,18 +86,8 @@ public static class UserEndpoints
         return user is null ? TypedResults.NotFound() : TypedResults.Ok(user);
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteUser(
-        Guid id, IUserService userService, IPostService postService)
+    private static async Task<Results<NoContent, NotFound>> DeleteUser(Guid id, IUserService userService)
     {
-        if (!await userService.ExistsAsync(id))
-        {
-            return TypedResults.NotFound();
-        }
-
-        // Remove the user's posts first so no post points to a missing user.
-        // Once the data lives in a database, cascade delete does this for us.
-        await postService.DeleteByUserAsync(id);
-        await userService.DeleteAsync(id);
-        return TypedResults.NoContent();
+        return await userService.DeleteAsync(id) ? TypedResults.NoContent() : TypedResults.NotFound();
     }
 }

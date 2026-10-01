@@ -1,6 +1,8 @@
+using BlogApi.Data;
 using BlogApi.Endpoints;
 using BlogApi.Errors;
 using BlogApi.Services;
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,12 +15,14 @@ builder.Services.AddValidation();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
-// Register each interface with the class that implements it.
-// These services keep their data in memory, so they are singletons: one instance
-// is shared by every request for the lifetime of the app. With a scoped or transient
-// lifetime each request would get a new, empty store.
-builder.Services.AddSingleton<IUserService, UserService>();
-builder.Services.AddSingleton<IPostService, PostService>();
+// The DbContext is registered as scoped: each request gets its own instance.
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// The services use the DbContext, so they are scoped too. A singleton cannot depend on a
+// scoped service, because it would keep one DbContext alive for the whole app.
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IPostService, PostService>();
 
 // Generates an OpenAPI document that describes every endpoint.
 builder.Services.AddOpenApi();

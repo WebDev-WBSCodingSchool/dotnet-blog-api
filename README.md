@@ -1,16 +1,21 @@
-# Blog API: step 03, OpenAPI
+# Blog API: step 04, EF Core and SQLite
 
-Lesson: Documenting APIs (OpenAPI exercise)
+Lesson: EF Core Fundamentals tutorial
 
 This repository holds the Blog API used across the ASP.NET Core lessons. Each lesson has its own branch. The starter for a lesson is the previous step's branch, and the finished code is the lesson's own branch.
 
 ## What this step adds
 
-- `Microsoft.AspNetCore.OpenApi` 10.0.x: `AddOpenApi()` and `MapOpenApi()` generate an OpenAPI 3.1 document
-- `Scalar.AspNetCore` 2.x: `MapScalarApiReference()` serves an interactive API reference
-- Both are mapped only in the Development environment
-- `WithTags`, `WithName` and `WithSummary` on every endpoint
-- `ProducesValidationProblem()` and `ProducesProblem(409)` for responses that come from validation, filters or the exception handler. Responses returned through `TypedResults` are described automatically
+- `Microsoft.EntityFrameworkCore.Sqlite` and `Microsoft.EntityFrameworkCore.Design` 10.0.x
+- A local tool manifest (`dotnet-tools.json`) that pins `dotnet-ef` 10.0.x
+- `Data/ApplicationDbContext.cs` with a one-to-many relationship: a user has many posts, and deleting a user deletes their posts (cascade delete)
+- Navigation properties `User.Posts` and `Post.User`
+- A unique index on `User.Email`
+- A value converter that stores `DateTimeOffset` as a number, so SQLite can sort by it
+- The connection string `DefaultConnection` in `appsettings.json` (`Data Source=blog.db`)
+- The `InitialCreate` migration in `Data/Migrations`
+- `UserService` and `PostService` rewritten to use the DbContext, registered as scoped
+- Read queries use `AsNoTracking()` and project straight to DTOs with `Select`
 
 ## Project layout
 
@@ -24,14 +29,31 @@ BlogApi/
   Dtos/        Users/, Posts/
   Models/      User.cs, Post.cs
   Services/    IUserService.cs, UserService.cs, IPostService.cs, PostService.cs
+  Data/        ApplicationDbContext.cs, Migrations/
+dotnet-tools.json
 ```
 
 ## Run it
 
-Requires the .NET 10 SDK.
+Requires the .NET 10 SDK. Run these commands from the repository root.
 
 ```bash
+# Install the dotnet-ef version pinned in dotnet-tools.json
+dotnet tool restore
+
+# Restore packages and build once, so dotnet ef can read the project
+dotnet build
+
+# Create BlogApi/blog.db and apply the migrations
+dotnet ef database update --project BlogApi
+
 dotnet run --project BlogApi
+```
+
+To add a migration after changing the model:
+
+```bash
+dotnet ef migrations add <Name> --project BlogApi -o Data/Migrations
 ```
 
 The API listens on `http://localhost:5080`.
@@ -68,8 +90,8 @@ curl -i -X POST http://localhost:5080/users \
 | PUT | /posts/{id} | 200, 400, 404 |
 | DELETE | /posts/{id} | 204, 404 |
 
-Data is kept in memory and is lost when the app stops.
+Data is stored in the SQLite file `BlogApi/blog.db`, which is ignored by Git.
 
 ## Next step
 
-`step-04-ef-core`
+`step-05-queries-seeding`

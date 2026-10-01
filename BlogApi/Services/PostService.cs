@@ -1,44 +1,45 @@
-using System.Collections.Concurrent;
+using BlogApi.Data;
 using BlogApi.Dtos.Posts;
 using BlogApi.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace BlogApi.Services;
 
-// Keeps posts in memory. The data is lost when the app stops.
 public class PostService : IPostService
 {
-    private readonly ConcurrentDictionary<Guid, Post> _posts = new();
-    private readonly IUserService _userService;
+    private readonly ApplicationDbContext _db;
 
-    // The container passes in the registered IUserService.
-    public PostService(IUserService userService)
+    public PostService(ApplicationDbContext db)
     {
-        _userService = userService;
+        _db = db;
     }
 
-    public Task<IReadOnlyList<PostResponseDto>> GetAllAsync()
+    public async Task<IReadOnlyList<PostResponseDto>> GetAllAsync()
     {
-        IReadOnlyList<PostResponseDto> posts = _posts.Values
+        return await _db.Posts
+            .AsNoTracking()
             .OrderByDescending(p => p.PublishedAt)
-            .Select(ToDto)
-            .ToList();
-        return Task.FromResult(posts);
+            .Select(p => new PostResponseDto(p.Id, p.UserId, p.Title, p.Content, p.PublishedAt))
+            .ToListAsync();
     }
 
-    public Task<IReadOnlyList<PostResponseDto>> GetByUserAsync(Guid userId)
+    public async Task<IReadOnlyList<PostResponseDto>> GetByUserAsync(Guid userId)
     {
-        IReadOnlyList<PostResponseDto> posts = _posts.Values
+        return await _db.Posts
+            .AsNoTracking()
             .Where(p => p.UserId == userId)
             .OrderByDescending(p => p.PublishedAt)
-            .Select(ToDto)
-            .ToList();
-        return Task.FromResult(posts);
+            .Select(p => new PostResponseDto(p.Id, p.UserId, p.Title, p.Content, p.PublishedAt))
+            .ToListAsync();
     }
 
-    public Task<PostResponseDto?> GetByIdAsync(Guid id)
+    public async Task<PostResponseDto?> GetByIdAsync(Guid id)
     {
-        var post = _posts.TryGetValue(id, out var found) ? ToDto(found) : null;
-        return Task.FromResult(post);
+        return await _db.Posts
+            .AsNoTracking()
+            .Where(p => p.Id == id)
+            .Select(p => new PostResponseDto(p.Id, p.UserId, p.Title, p.Content, p.PublishedAt))
+            .FirstOrDefaultAsync();
     }
 
     // Returns null when the author does not exist.
@@ -47,7 +48,7 @@ public class PostService : IPostService
         // Validation has already checked that UserId is present.
         var userId = dto.UserId!.Value;
 
-        if (!await _userService.ExistsAsync(userId))
+        if (!await _db.Users.AnyAsync(u => u.Id == userId))
         {
             return null;
         }
@@ -61,34 +62,38 @@ public class PostService : IPostService
             PublishedAt = DateTimeOffset.UtcNow
         };
 
-        _posts[post.Id] = post;
+        _db.Posts.Add(post);
+        await _db.SaveChangesAsync();
+
         return ToDto(post);
     }
 
-    public Task<PostResponseDto?> UpdateAsync(Guid id, UpdatePostDto dto)
+    public async Task<PostResponseDto?> UpdateAsync(Guid id, UpdatePostDto dto)
     {
-        if (!_posts.TryGetValue(id, out var post))
+        var post = await _db.Posts.FindAsync(id);
+        if (post is null)
         {
-            return Task.FromResult<PostResponseDto?>(null);
+            return null;
         }
 
         post.Title = dto.Title;
         post.Content = dto.Content;
-        return Task.FromResult<PostResponseDto?>(ToDto(post));
+        await _db.SaveChangesAsync();
+
+        return ToDto(post);
     }
 
-    public Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid id)
     {
-        return Task.FromResult(_posts.TryRemove(id, out _));
-    }
-
-    public Task DeleteByUserAsync(Guid userId)
-    {
-        foreach (var post in _posts.Values.Where(p => p.UserId == userId))
+        var post = await _db.Posts.FindAsync(id);
+        if (post is null)
         {
-            _posts.TryRemove(post.Id, out _);
+            return false;
         }
-        return Task.CompletedTask;
+
+        _db.Posts.Remove(post);
+        await _db.SaveChangesAsync();
+        return true;
     }
 
     private static PostResponseDto ToDto(Post post) =>
