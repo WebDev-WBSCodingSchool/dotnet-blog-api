@@ -13,11 +13,13 @@ public class AuthService : IAuthService
 {
     private readonly UserManager<User> _userManager;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<AuthService> _logger;
 
-    public AuthService(UserManager<User> userManager, IConfiguration configuration)
+    public AuthService(UserManager<User> userManager, IConfiguration configuration, ILogger<AuthService> logger)
     {
         _userManager = userManager;
         _configuration = configuration;
+        _logger = logger;
     }
 
     public async Task<(IdentityResult Result, UserResponseDto? User)> RegisterAsync(RegisterDto dto)
@@ -34,8 +36,11 @@ public class AuthService : IAuthService
         var result = await _userManager.CreateAsync(user, dto.Password);
         if (!result.Succeeded)
         {
+            _logger.LogInformation("Registration rejected: {Errors}", string.Join(", ", result.Errors.Select(e => e.Code)));
             return (result, null);
         }
+
+        _logger.LogInformation("User {UserId} registered", user.Id);
 
         return (result, new UserResponseDto(user.Id, user.Name, user.Email, user.CreatedAt));
     }
@@ -47,11 +52,14 @@ public class AuthService : IAuthService
         {
             // Same answer for an unknown email and a wrong password,
             // so callers cannot find out which emails are registered.
+            // The email is not logged, because logs should not contain personal data.
+            _logger.LogWarning("Failed login attempt");
             return null;
         }
 
         var expiresAt = DateTimeOffset.UtcNow.AddMinutes(_configuration.GetValue("Jwt:ExpiryMinutes", 60));
         var token = CreateToken(user, expiresAt);
+        _logger.LogInformation("User {UserId} logged in", user.Id);
 
         return new LoginResponseDto(token, expiresAt);
     }

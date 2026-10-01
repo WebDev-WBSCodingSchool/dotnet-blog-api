@@ -1,20 +1,22 @@
-# Blog API: step 08, testing
+# Blog API: step 09, observability
 
-Lesson: Unit Testing and Integration Testing in ASP.NET
+Lesson: Observability
 
 This repository holds the Blog API used across the ASP.NET Core lessons. Each lesson has its own branch. The starter for a lesson is the previous step's branch, and the finished code is the lesson's own branch.
 
 ## What this step adds
 
-- A test project, `BlogApi.Tests`, created with `dotnet new xunit` and added to `BlogApi.slnx`
-- Packages: xUnit 2.9.3, Moq 4.21.0, `Microsoft.AspNetCore.Mvc.Testing` 10.0.x and `Microsoft.EntityFrameworkCore.InMemory` 10.0.x
-- `Unit/TestDbContextFactory.cs` creates an in-memory `ApplicationDbContext` with a new database name for every test
-- `Unit/PostServiceTests.cs` tests `PostService` against that in-memory database
-- `Unit/AuthServiceTests.cs` tests `AuthService` with a mocked `UserManager<User>` (Moq) and checks the `sub` claim of the issued token
-- `Integration/CustomWebApplicationFactory.cs` starts the API in memory. In `ConfigureTestServices` it removes the SQLite `DbContext` registration and adds an in-memory database, unique to each factory
-- `Integration/TestAuthHandler.cs`, a fake authentication scheme that logs a test in as the user named in the `X-Test-UserId` header
-- Integration tests for public and protected endpoints: `401` without a token, `201` with a user, `403` when editing someone else's post, and a full register, login and Bearer flow with a real JWT
-- No changes to the API project. .NET 10 makes the `Program` class public, so `WebApplicationFactory<Program>` works without a `public partial class Program` line
+- `Serilog.AspNetCore` 10.0.0, which includes the console and file sinks. Logs go to the console and to `BlogApi/logs/blog-api-<date>.log`
+- Minimum log levels in the `Serilog` section of `appsettings.json`
+- `UseSerilogRequestLogging()`: one log line per request with method, path, status code and duration
+- `ILogger<T>` in `PostService` and `AuthService`, with structured properties such as `{PostId}` and `{UserId}`
+- Health checks with `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` 10.0.x:
+  - `/health` runs every check
+  - `/health/ready` runs the checks tagged `ready` (the database check)
+  - `/health/live` runs no checks and answers as long as the app is up
+- `Services/BlogMetrics.cs`, a `Meter` named `BlogApi` with a `blogapi.posts.created` counter, incremented by `PostService`
+- `dotnet-counters` in the tool manifest, to watch the counter
+- The unit tests pass a `NullLogger` and a `BlogMetrics` to the services, and `HealthEndpointsTests` checks the three health endpoints
 
 ## The signing key
 
@@ -34,16 +36,16 @@ In production, set it as an environment variable (`Jwt__Key`) or in a key vault.
 BlogApi.slnx
 BlogApi/
   Program.cs
-  Endpoints/   AuthEndpoints.cs, UserEndpoints.cs, PostEndpoints.cs, ClaimsPrincipalExtensions.cs
+  Endpoints/   AuthEndpoints.cs, UserEndpoints.cs, PostEndpoints.cs, HealthEndpoints.cs, ClaimsPrincipalExtensions.cs
   Filters/     RejectEmptyIdFilter.cs
   Errors/      GlobalExceptionHandler.cs
   Dtos/        Auth/, Users/, Posts/
   Models/      User.cs, Post.cs
-  Services/    IAuthService.cs, AuthService.cs, IUserService.cs, UserService.cs, IPostService.cs, PostService.cs
+  Services/    IAuthService.cs, AuthService.cs, IUserService.cs, UserService.cs, IPostService.cs, PostService.cs, BlogMetrics.cs
   Data/        ApplicationDbContext.cs, DbSeeder.cs, Migrations/
 BlogApi.Tests/
   Unit/          TestDbContextFactory.cs, PostServiceTests.cs, AuthServiceTests.cs
-  Integration/   CustomWebApplicationFactory.cs, TestAuthHandler.cs, AuthEndpointsTests.cs, PostEndpointsTests.cs, UserEndpointsTests.cs
+  Integration/   CustomWebApplicationFactory.cs, TestAuthHandler.cs, AuthEndpointsTests.cs, PostEndpointsTests.cs, UserEndpointsTests.cs, HealthEndpointsTests.cs
 dotnet-tools.json
 ```
 
@@ -67,6 +69,20 @@ dotnet ef database update --project BlogApi
 To start again with a fresh database, stop the app and delete `BlogApi/blog.db`.
 
 If you have a `blog.db` from step 05, the `AddIdentity` migration keeps your old users, but they have no password and cannot log in. Delete `BlogApi/blog.db` (or run `dotnet ef database drop --project BlogApi`) and start the app again, so the seeder creates users with passwords.
+
+Check the health endpoints:
+
+```bash
+curl http://localhost:5080/health
+curl http://localhost:5080/health/ready
+curl http://localhost:5080/health/live
+```
+
+Watch the custom metric while you create posts (in a second terminal, with the app running):
+
+```bash
+dotnet dotnet-counters monitor --name BlogApi --counters BlogApi
+```
 
 Run the tests:
 
@@ -116,6 +132,7 @@ In Scalar, paste the token into the Authentication box to call the protected end
 | POST | /auth/register | 201, 400 |
 | POST | /auth/login | 200, 400, 401 |
 | GET | /auth/me (token) | 200, 401, 404 |
+| GET | /health, /health/ready, /health/live | 200, 503 |
 | GET | /users | 200 |
 | GET | /users/{id} | 200, 404 |
 | GET | /users/{id}/posts | 200, 404 |
@@ -129,4 +146,4 @@ Data is stored in the SQLite file `BlogApi/blog.db`, which is ignored by Git.
 
 ## Next step
 
-`step-09-observability`
+This is the last step.

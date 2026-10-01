@@ -11,8 +11,20 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Serilog replaces the default logging providers. Every ILogger<T> in the app now writes through it.
+// Minimum levels come from the "Serilog" section in appsettings.json.
+builder.Services.AddSerilog((services, logger) => logger
+    .ReadFrom.Configuration(builder.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    // One file per day in BlogApi/logs. shared: true lets several app instances
+    // (for example the integration tests) write to the same file.
+    .WriteTo.File("logs/blog-api-.log", rollingInterval: RollingInterval.Day, shared: true));
 
 // Validates DataAnnotations on endpoint parameters (the DTOs) before the handler runs.
 // An invalid request gets a 400 response with the errors in ProblemDetails format.
@@ -76,6 +88,14 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
+// Custom metrics. A singleton, because the counters must live as long as the app.
+builder.Services.AddSingleton<BlogMetrics>();
+
+// Health checks. The DbContext check tries to connect to the database.
+// The "ready" tag puts it in the /health/ready endpoint.
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ApplicationDbContext>(tags: ["ready"]);
+
 // Generates an OpenAPI document that describes every endpoint.
 builder.Services.AddOpenApi(options =>
 {
@@ -115,6 +135,10 @@ builder.Services.AddOpenApi(options =>
 
 var app = builder.Build();
 
+// Writes one log line per request with the method, path, status code and duration.
+// It comes first so it also sees requests that end in an exception.
+app.UseSerilogRequestLogging();
+
 // Only expose the API documentation while developing.
 if (app.Environment.IsDevelopment())
 {
@@ -149,5 +173,6 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapPostEndpoints();
+app.MapHealthEndpoints();
 
 app.Run();

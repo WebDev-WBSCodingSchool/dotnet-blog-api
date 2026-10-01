@@ -1,7 +1,10 @@
+using System.Diagnostics.Metrics;
 using BlogApi.Data;
 using BlogApi.Dtos.Posts;
 using BlogApi.Models;
 using BlogApi.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BlogApi.Tests.Unit;
 
@@ -15,7 +18,17 @@ public class PostServiceTests
     public PostServiceTests()
     {
         _db = TestDbContextFactory.Create();
-        _service = new PostService(_db);
+
+        // NullLogger discards log messages. The tests do not check what is logged.
+        var logger = NullLogger<PostService>.Instance;
+
+        // BlogMetrics needs an IMeterFactory. AddMetrics registers the default one.
+        var meterFactory = new ServiceCollection()
+            .AddMetrics()
+            .BuildServiceProvider()
+            .GetRequiredService<IMeterFactory>();
+
+        _service = new PostService(_db, logger, new BlogMetrics(meterFactory));
     }
 
     private async Task<User> AddUserAsync(string name)

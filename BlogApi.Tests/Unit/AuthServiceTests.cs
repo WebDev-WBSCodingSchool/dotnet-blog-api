@@ -3,6 +3,7 @@ using BlogApi.Models;
 using BlogApi.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Moq;
 
@@ -32,7 +33,7 @@ public class AuthServiceTests
             })
             .Build();
 
-        _service = new AuthService(_userManager.Object, configuration);
+        _service = new AuthService(_userManager.Object, configuration, NullLogger<AuthService>.Instance);
     }
 
     [Fact]

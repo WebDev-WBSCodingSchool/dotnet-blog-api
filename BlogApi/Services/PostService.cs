@@ -8,10 +8,14 @@ namespace BlogApi.Services;
 public class PostService : IPostService
 {
     private readonly ApplicationDbContext _db;
+    private readonly ILogger<PostService> _logger;
+    private readonly BlogMetrics _metrics;
 
-    public PostService(ApplicationDbContext db)
+    public PostService(ApplicationDbContext db, ILogger<PostService> logger, BlogMetrics metrics)
     {
         _db = db;
+        _logger = logger;
+        _metrics = metrics;
     }
 
     public async Task<IReadOnlyList<PostResponseDto>> GetAllAsync(string? search)
@@ -56,6 +60,7 @@ public class PostService : IPostService
         var user = await _db.Users.FindAsync(userId);
         if (user is null)
         {
+            _logger.LogWarning("Cannot create a post: user {UserId} does not exist", userId);
             return null;
         }
 
@@ -70,6 +75,10 @@ public class PostService : IPostService
 
         _db.Posts.Add(post);
         await _db.SaveChangesAsync();
+
+        // {PostId} and {UserId} are stored as separate properties, so the logs can be searched by them.
+        _logger.LogInformation("User {UserId} created post {PostId}", userId, post.Id);
+        _metrics.PostCreated();
 
         return ToDto(post);
     }
@@ -91,6 +100,8 @@ public class PostService : IPostService
         post.Content = dto.Content;
         await _db.SaveChangesAsync();
 
+        _logger.LogInformation("Post {PostId} updated", id);
+
         return ToDto(post);
     }
 
@@ -104,6 +115,8 @@ public class PostService : IPostService
 
         _db.Posts.Remove(post);
         await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Post {PostId} deleted", id);
         return true;
     }
 
