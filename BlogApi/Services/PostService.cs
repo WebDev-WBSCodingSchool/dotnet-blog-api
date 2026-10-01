@@ -14,12 +14,21 @@ public class PostService : IPostService
         _db = db;
     }
 
-    public async Task<IReadOnlyList<PostResponseDto>> GetAllAsync()
+    public async Task<IReadOnlyList<PostResponseDto>> GetAllAsync(string? search)
     {
-        return await _db.Posts
-            .AsNoTracking()
+        // Build the query step by step. Nothing runs against the database until ToListAsync.
+        var query = _db.Posts.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(p => p.Title.Contains(search) || p.Content.Contains(search));
+        }
+
+        // Reading p.User.Name inside Select makes EF Core add a join to the users table.
+        // Include is only needed when a query returns entities, so it is left out here.
+        return await query
             .OrderByDescending(p => p.PublishedAt)
-            .Select(p => new PostResponseDto(p.Id, p.UserId, p.Title, p.Content, p.PublishedAt))
+            .Select(p => new PostResponseDto(p.Id, p.UserId, p.User.Name, p.Title, p.Content, p.PublishedAt))
             .ToListAsync();
     }
 
@@ -29,7 +38,7 @@ public class PostService : IPostService
             .AsNoTracking()
             .Where(p => p.UserId == userId)
             .OrderByDescending(p => p.PublishedAt)
-            .Select(p => new PostResponseDto(p.Id, p.UserId, p.Title, p.Content, p.PublishedAt))
+            .Select(p => new PostResponseDto(p.Id, p.UserId, p.User.Name, p.Title, p.Content, p.PublishedAt))
             .ToListAsync();
     }
 
@@ -38,7 +47,7 @@ public class PostService : IPostService
         return await _db.Posts
             .AsNoTracking()
             .Where(p => p.Id == id)
-            .Select(p => new PostResponseDto(p.Id, p.UserId, p.Title, p.Content, p.PublishedAt))
+            .Select(p => new PostResponseDto(p.Id, p.UserId, p.User.Name, p.Title, p.Content, p.PublishedAt))
             .FirstOrDefaultAsync();
     }
 
@@ -46,9 +55,8 @@ public class PostService : IPostService
     public async Task<PostResponseDto?> CreateAsync(CreatePostDto dto)
     {
         // Validation has already checked that UserId is present.
-        var userId = dto.UserId!.Value;
-
-        if (!await _db.Users.AnyAsync(u => u.Id == userId))
+        var user = await _db.Users.FindAsync(dto.UserId!.Value);
+        if (user is null)
         {
             return null;
         }
@@ -56,7 +64,7 @@ public class PostService : IPostService
         var post = new Post
         {
             Id = Guid.NewGuid(),
-            UserId = userId,
+            User = user,
             Title = dto.Title,
             Content = dto.Content,
             PublishedAt = DateTimeOffset.UtcNow
@@ -70,7 +78,12 @@ public class PostService : IPostService
 
     public async Task<PostResponseDto?> UpdateAsync(Guid id, UpdatePostDto dto)
     {
-        var post = await _db.Posts.FindAsync(id);
+        // Include loads the author together with the post, so ToDto can read post.User.Name.
+        // The query is tracked, so SaveChangesAsync writes the changes back.
+        var post = await _db.Posts
+            .Include(p => p.User)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
         if (post is null)
         {
             return null;
@@ -96,6 +109,7 @@ public class PostService : IPostService
         return true;
     }
 
+    // Expects post.User to be loaded.
     private static PostResponseDto ToDto(Post post) =>
-        new(post.Id, post.UserId, post.Title, post.Content, post.PublishedAt);
+        new(post.Id, post.UserId, post.User.Name, post.Title, post.Content, post.PublishedAt);
 }

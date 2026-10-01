@@ -15,7 +15,7 @@ public static class PostEndpoints
 
         group.MapGet("/", GetAllPosts)
             .WithName("GetAllPosts")
-            .WithSummary("List all posts, newest first");
+            .WithSummary("List posts, newest first, optionally filtered by a search term");
 
         group.MapGet("/{id:guid}", GetPostById)
             .WithName("GetPostById")
@@ -40,9 +40,10 @@ public static class PostEndpoints
         return group;
     }
 
-    private static async Task<Ok<IReadOnlyList<PostResponseDto>>> GetAllPosts(IPostService postService)
+    // search is read from the query string, for example /posts?search=engine
+    private static async Task<Ok<IReadOnlyList<PostResponseDto>>> GetAllPosts(string? search, IPostService postService)
     {
-        return TypedResults.Ok(await postService.GetAllAsync());
+        return TypedResults.Ok(await postService.GetAllAsync(search));
     }
 
     private static async Task<Results<Ok<PostResponseDto>, NotFound>> GetPostById(Guid id, IPostService postService)

@@ -37,6 +37,16 @@ if (app.Environment.IsDevelopment())
 
     // Interactive API reference built from that document: /scalar
     app.MapScalarApiReference();
+
+    // The DbContext is scoped, and no request is running yet, so create a scope by hand.
+    // The scope and the DbContext are disposed at the end of this block.
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+    // Apply any pending migrations, then add sample data if the database is empty.
+    // This only runs in Development. In production, migrations are applied as a separate step.
+    await db.Database.MigrateAsync();
+    await DbSeeder.SeedAsync(db);
 }
 
 // Catches exceptions thrown later in the pipeline and passes them to GlobalExceptionHandler.
